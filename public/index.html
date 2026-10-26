@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b82bd">
+    <meta name="description" content="Aero Market: tecnologia, cores e compras seguras em um marketplace demonstrativo.">
+    <title>Aero Market — seu cantinho conectado</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="desktop">
+      <header class="topbar glass">
+        <a class="brand" href="#" aria-label="Aero Market, página inicial">
+          <span class="brand-mark" aria-hidden="true">✦</span>
+          <span>Aero<span>Market</span><small>seu cantinho conectado</small></span>
+        </a>
+        <label class="search-box">
+          <span aria-hidden="true">⌕</span>
+          <input id="search" type="search" placeholder="O que você procura hoje?" aria-label="Buscar produtos">
+          <kbd>⌘ K</kbd>
+        </label>
+        <div class="top-actions">
+          <button id="orders-button" class="icon-button" type="button" title="Meus pedidos" aria-label="Meus pedidos">◷</button>
+          <button id="login-button" class="login-button" type="button">Entrar</button>
+          <button id="cart-button" class="cart-button" type="button" aria-label="Abrir carrinho">
+            <span aria-hidden="true">🛍</span><span>Carrinho</span><b id="cart-count">0</b>
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero glass">
+          <div class="hero-copy">
+            <span class="eyebrow"><span class="live-dot"></span> UM DIA MAIS COLORIDO COMEÇA AQUI</span>
+            <h1>Um toque de<br><span>futuro retrô.</span></h1>
+            <p>Novidades que combinam tecnologia, boas vibrações e um azulzinho de céu de verão.</p>
+            <a class="primary-button" href="#catalogo">Explorar novidades <span aria-hidden="true">→</span></a>
+            <div class="hero-note"><span>✧</span> Compra demonstrativa e segura <span>·</span> Entrega simulada</div>
+          </div>
+          <div class="hero-art" aria-label="Ilustração de um planeta azul e brilhante">
+            <div class="sun-glow"></div>
+            <div class="planet"><span class="planet-shine"></span><span class="planet-ring"></span></div>
+            <div class="bubble bubble-one">✦</div><div class="bubble bubble-two">·</div><div class="bubble bubble-three">✧</div>
+            <div class="art-caption">wave after wave <span>♡</span></div>
+          </div>
+          <div class="hero-pagination" aria-hidden="true"><i class="selected"></i><i></i><i></i></div>
+        </section>
+
+        <section class="benefits" aria-label="Benefícios">
+          <div class="benefit glass"><span class="benefit-icon blue">⌁</span><span><b>Compra tranquila</b><small>Seus dados, bem cuidados</small></span></div>
+          <div class="benefit glass"><span class="benefit-icon green">↗</span><span><b>Entrega simulada</b><small>Acompanhe seus pedidos</small></span></div>
+          <div class="benefit glass"><span class="benefit-icon lilac">✧</span><span><b>Seleção especial</b><small>Achadinhos para você</small></span></div>
+        </section>
+
+        <section id="catalogo" class="catalog">
+          <div class="section-heading">
+            <div><span class="eyebrow">ESCOLHIDOS A DEDO</span><h2>Achadinhos do momento <span>✳</span></h2></div>
+            <label class="category-select">Categoria <select id="category-filter" aria-label="Filtrar por categoria"><option value="">Todas</option></select></label>
+          </div>
+          <div id="product-grid" class="product-grid" aria-live="polite"></div>
+        </section>
+
+        <section class="newsletter glass">
+          <span class="newsletter-spark" aria-hidden="true">✧</span>
+          <div><span class="eyebrow">UMA JANELINHA PARA BOAS NOVIDADES</span><h2>O futuro pode ser leve.</h2><p>Um marketplace de demonstração, feito para uma atividade acadêmica.</p></div>
+          <span class="newsletter-stamp">made of<br><b>good vibes</b> ☁</span>
+        </section>
+      </main>
+      <footer><span>© 2026 Aero Market · Projeto acadêmico demonstrativo</span><span>Privacidade em primeiro lugar <b>✦</b></span></footer>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="auth-dialog" class="window-dialog">
+      <div class="window-title"><span>◈ Central de acesso</span><button class="window-close" data-close="auth-dialog" aria-label="Fechar">×</button></div>
+      <div class="dialog-body">
+        <div class="dialog-intro"><div class="dialog-icon">☁</div><div><h2>Olá, que bom ter você!</h2><p>Entre ou crie uma conta para acompanhar seus pedidos.</p></div></div>
+        <div class="tabs"><button class="tab active" data-auth-tab="login">Entrar</button><button class="tab" data-auth-tab="register">Criar conta</button></div>
+        <form id="login-form" class="form-grid">
+          <label class="full">E-mail<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+          <label class="full">Senha<input name="password" type="password" autocomplete="current-password" minlength="10" required></label>
+          <button class="primary-button full" type="submit">Entrar com segurança <span>→</span></button>
+        </form>
+        <form id="register-form" class="form-grid hidden">
+          <label>Nome completo<input name="name" autocomplete="name" maxlength="120" minlength="3" required></label>
+          <label>E-mail<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+          <label>CPF<input name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required></label>
+          <label>Telefone<input name="phone" type="tel" autocomplete="tel" placeholder="(11) 99999-9999" required></label>
+          <label class="full">Endereço de entrega<input name="address" autocomplete="street-address" maxlength="300" placeholder="Rua, número, bairro, cidade e CEP" required></label>
+          <label class="full">Senha <small>(mínimo de 10 caracteres; até 72 bytes)</small><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="72" required></label>
+          <button class="primary-button full" type="submit">Criar minha conta <span>→</span></button>
+          <p class="privacy-note full">CPF, telefone e endereço são criptografados no banco. Use dados fictícios nesta demonstração.</p>
+        </form>
+      </div>
+    </dialog>
+
+    <dialog id="cart-dialog" class="window-dialog">
+      <div class="window-title"><span>🛍 Meu carrinho</span><button class="window-close" data-close="cart-dialog" aria-label="Fechar">×</button></div>
+      <div class="dialog-body"><div id="cart-content"></div></div>
+    </dialog>
+
+    <dialog id="checkout-dialog" class="window-dialog">
+      <div class="window-title"><span>✦ Finalizar pedido</span><button class="window-close" data-close="checkout-dialog" aria-label="Fechar">×</button></div>
+      <div class="dialog-body">
+        <div id="checkout-summary"></div>
+        <form id="checkout-form" class="form-grid">
+          <label class="full">Bandeira
+            <select name="brand" required><option>Visa</option><option>Mastercard</option><option>Amex</option><option>Elo</option><option>Hipercard</option></select>
+          </label>
+          <label class="full">Número do cartão de demonstração<input name="card" inputmode="numeric" autocomplete="off" placeholder="0000 0000 0000 0000" required></label>
+          <label>Validade<input name="expiry" inputmode="numeric" autocomplete="off" placeholder="MM/AA" required></label>
+          <label>CVV<input name="cvv" inputmode="numeric" autocomplete="off" placeholder="000" required></label>
+          <p class="payment-note full">Demonstração acadêmica: use números fictícios. Cartão e CVV são processados localmente no navegador e nunca enviados ou armazenados.</p>
+          <button class="primary-button full" type="submit">Confirmar compra segura <span>→</span></button>
+        </form>
+      </div>
+    </dialog>
+
+    <dialog id="orders-dialog" class="window-dialog">
+      <div class="window-title"><span>◷ Meus pedidos</span><button class="window-close" data-close="orders-dialog" aria-label="Fechar">×</button></div>
+      <div class="dialog-body"><div id="orders-content"></div></div>
+    </dialog>
+  </body>
+</html>
