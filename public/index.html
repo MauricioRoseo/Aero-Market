@@ -26,6 +26,7 @@
         </label>
         <div class="top-actions">
           <button id="orders-button" class="icon-button" type="button" title="Meus pedidos" aria-label="Meus pedidos">◷</button>
+          <button id="cards-button" class="icon-button" type="button" title="Meus cartões" aria-label="Meus cartões">▣</button>
           <button id="login-button" class="login-button" type="button">Entrar</button>
           <button id="cart-button" class="cart-button" type="button" aria-label="Abrir carrinho">
             <span aria-hidden="true">🛍</span><span>Carrinho</span><b id="cart-count">0</b>
@@ -93,6 +94,7 @@
           <label class="full">Endereço de entrega<input name="address" autocomplete="street-address" maxlength="300" placeholder="Rua, número, bairro, cidade e CEP" required></label>
           <label class="full">Senha <small>(mínimo de 10 caracteres; até 72 bytes)</small><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="72" required></label>
           <button class="primary-button full" type="submit">Criar minha conta <span>→</span></button>
+          <p id="register-feedback" class="form-feedback full hidden" role="alert" aria-live="polite"></p>
           <p class="privacy-note full">CPF, telefone e endereço são criptografados no banco. Use dados fictícios nesta demonstração.</p>
         </form>
       </div>
@@ -108,14 +110,30 @@
       <div class="dialog-body">
         <div id="checkout-summary"></div>
         <form id="checkout-form" class="form-grid">
+          <label class="full">Cartão para esta compra
+            <select id="checkout-card" name="cardId" required><option value="">Carregando cartões...</option></select>
+          </label>
+          <button id="manage-cards-from-checkout" class="secondary-button full" type="button">Gerenciar cartões</button>
+          <p id="checkout-card-hint" class="payment-note full"></p>
+          <button class="primary-button full" type="submit">Confirmar compra segura <span>→</span></button>
+        </form>
+      </div>
+    </dialog>
+
+    <dialog id="cards-dialog" class="window-dialog">
+      <div class="window-title"><span>▣ Meus cartões demonstrativos</span><button class="window-close" data-close="cards-dialog" aria-label="Fechar">×</button></div>
+      <div class="dialog-body">
+        <div id="payment-card-list" class="payment-card-list"></div>
+        <form id="payment-card-form" class="form-grid">
+          <label class="full">Nome no cartão<input name="cardholder" autocomplete="cc-name" maxlength="100" required></label>
           <label class="full">Bandeira
             <select name="brand" required><option>Visa</option><option>Mastercard</option><option>Amex</option><option>Elo</option><option>Hipercard</option></select>
           </label>
-          <label class="full">Número do cartão de demonstração<input name="card" inputmode="numeric" autocomplete="off" placeholder="0000 0000 0000 0000" required></label>
-          <label>Validade<input name="expiry" inputmode="numeric" autocomplete="off" placeholder="MM/AA" required></label>
-          <label>CVV<input name="cvv" inputmode="numeric" autocomplete="off" placeholder="000" required></label>
-          <p class="payment-note full">Demonstração acadêmica: use números fictícios. Cartão e CVV são processados localmente no navegador e nunca enviados ou armazenados.</p>
-          <button class="primary-button full" type="submit">Confirmar compra segura <span>→</span></button>
+          <label class="full">Número do cartão fictício<input name="number" inputmode="numeric" autocomplete="off" maxlength="23" placeholder="0000 0000 0000 0000" required></label>
+          <label class="full">Validade<input name="expiry" type="month" autocomplete="cc-exp" required></label>
+          <button class="primary-button full" type="submit">Salvar cartão demonstrativo <span>→</span></button>
+          <p id="payment-card-feedback" class="form-feedback full hidden" role="alert" aria-live="polite"></p>
+          <p class="payment-note full">Use somente dados fictícios. O número completo é validado neste navegador e não é enviado nem salvo; não pedimos CVV. Nenhum pagamento real é processado.</p>
         </form>
       </div>
     </dialog>

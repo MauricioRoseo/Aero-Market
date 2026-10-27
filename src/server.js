@@ -14,6 +14,7 @@ const { csrfToken, decrypt, emailLookup, encrypt } = require("./security");
 const app = express();
 const PgSession = connectPgSimple(session);
 const port = Number(process.env.PORT || 3000);
+const host = process.env.HOST || "0.0.0.0";
 const dummyPasswordHash = bcrypt.hashSync("aero-market-invalid-login", 12);
 
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
@@ -58,6 +59,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." },
 });
+const paymentBrands = new Set(["Visa", "Mastercard", "Amex", "Elo", "Hipercard"]);
 
 function requireCsrf(req, res, next) {
   const supplied = req.get("x-csrf-token");
@@ -112,6 +114,64 @@ app.get("/api/products", asyncRoute(async (_req, res) => {
     "SELECT id, name, description, price_cents, stock, category, image_url FROM products ORDER BY id",
   );
   res.json(result.rows);
+}));
+
+app.get("/api/payment-cards", requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(
+    `SELECT id, cardholder_encrypted, brand, last4, expiry_month, expiry_year
+     FROM payment_cards WHERE user_id = $1 ORDER BY created_at DESC, id DESC`,
+    [req.session.userId],
+  );
+  res.set("Cache-Control", "no-store").json(result.rows.map((card) => ({
+    id: card.id,
+    cardholder: decrypt(card.cardholder_encrypted),
+    brand: card.brand,
+    last4: card.last4,
+    expiry_month: card.expiry_month,
+    expiry_year: card.expiry_year,
+  })));
+}));
+
+app.post("/api/payment-cards", requireAuth, requireCsrf, asyncRoute(async (req, res) => {
+  const { cardholder, brand, last4, expiryMonth, expiryYear } = req.body;
+  const month = Number(expiryMonth);
+  const year = Number(expiryYear);
+  const now = new Date();
+  const currentMonth = now.getUTCMonth() + 1;
+  const currentYear = now.getUTCFullYear();
+  if (typeof cardholder !== "string" || cardholder.trim().length < 2 || cardholder.trim().length > 100 ||
+      !paymentBrands.has(brand) || typeof last4 !== "string" || !/^\d{4}$/.test(last4) ||
+      !Number.isInteger(month) || month < 1 || month > 12 ||
+      !Number.isInteger(year) || year < currentYear || year > currentYear + 20 ||
+      (year === currentYear && month < currentMonth)) {
+    return res.status(400).json({ error: "Confira o titular, bandeira e validade do cartão demonstrativo." });
+  }
+
+  const result = await pool.query(
+    `INSERT INTO payment_cards (user_id, cardholder_encrypted, brand, last4, expiry_month, expiry_year)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, cardholder_encrypted, brand, last4, expiry_month, expiry_year`,
+    [req.session.userId, encrypt(cardholder.trim()), brand, last4, month, year],
+  );
+  const card = result.rows[0];
+  res.status(201).json({ card: {
+    id: card.id,
+    cardholder: decrypt(card.cardholder_encrypted),
+    brand: card.brand,
+    last4: card.last4,
+    expiry_month: card.expiry_month,
+    expiry_year: card.expiry_year,
+  } });
+}));
+
+app.delete("/api/payment-cards/:cardId", requireAuth, requireCsrf, asyncRoute(async (req, res) => {
+  if (!/^\d+$/.test(req.params.cardId)) return res.status(400).json({ error: "Cartão inválido." });
+  const result = await pool.query(
+    "DELETE FROM payment_cards WHERE id = $1 AND user_id = $2",
+    [req.params.cardId, req.session.userId],
+  );
+  if (!result.rowCount) return res.status(404).json({ error: "Cartão não encontrado." });
+  res.status(204).end();
 }));
 
 app.post("/api/register", authLimiter, requireCsrf, asyncRoute(async (req, res) => {
@@ -187,9 +247,8 @@ app.post("/api/orders", requireAuth, requireCsrf, asyncRoute(async (req, res) =>
   if (!Array.isArray(items) || items.length < 1 || items.length > 20 ||
       items.some((item) => !Number.isSafeInteger(item.productId) || !Number.isSafeInteger(item.quantity) ||
         item.quantity < 1 || item.quantity > 10) ||
-      !payment || !["Visa", "Mastercard", "Amex", "Elo", "Hipercard"].includes(payment.brand) ||
-      typeof payment.last4 !== "string" || !/^\d{4}$/.test(payment.last4)) {
-    return res.status(400).json({ error: "Confira os produtos, quantidades e os dados demonstrativos do pagamento." });
+      !payment || typeof payment.cardId !== "string" || !/^\d+$/.test(payment.cardId)) {
+    return res.status(400).json({ error: "Selecione um cartão cadastrado para concluir a compra." });
   }
 
   const quantities = new Map();
@@ -201,6 +260,23 @@ app.post("/api/orders", requireAuth, requireCsrf, asyncRoute(async (req, res) =>
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const cardResult = await client.query(
+      `SELECT id, brand, last4, expiry_month, expiry_year
+       FROM payment_cards WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+      [payment.cardId, req.session.userId],
+    );
+    const paymentCard = cardResult.rows[0];
+    if (!paymentCard) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "O cartão selecionado não pertence à sua conta." });
+    }
+    const now = new Date();
+    if (paymentCard.expiry_year < now.getUTCFullYear() ||
+        (paymentCard.expiry_year === now.getUTCFullYear() && paymentCard.expiry_month < now.getUTCMonth() + 1)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "O cartão selecionado está vencido." });
+    }
+
     const productIds = [...quantities.keys()].sort((a, b) => a - b);
     const productResult = await client.query(
       "SELECT id, name, price_cents, stock FROM products WHERE id = ANY($1::bigint[]) ORDER BY id FOR UPDATE",
@@ -227,9 +303,9 @@ app.post("/api/orders", requireAuth, requireCsrf, asyncRoute(async (req, res) =>
       return res.status(401).json({ error: "Faça login novamente para concluir o pedido." });
     }
     const orderResult = await client.query(
-      `INSERT INTO orders (user_id, total_cents, shipping_address_encrypted, payment_brand, payment_last4)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id, status, total_cents, created_at`,
-      [req.session.userId, totalCents, userResult.rows[0].address_encrypted, payment.brand, payment.last4],
+      `INSERT INTO orders (user_id, payment_card_id, total_cents, shipping_address_encrypted, payment_brand, payment_last4)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, status, total_cents, created_at`,
+      [req.session.userId, paymentCard.id, totalCents, userResult.rows[0].address_encrypted, paymentCard.brand, paymentCard.last4],
     );
     for (const product of productResult.rows) {
       const quantity = quantities.get(Number(product.id));
@@ -306,7 +382,7 @@ app.use((error, _req, res, _next) => {
 
 initializeDatabase()
   .then(() => {
-    app.listen(port, () => console.log(`Aero Market disponível em http://localhost:${port}`));
+    app.listen(port, host, () => console.log(`Aero Market disponível em http://${host}:${port}`));
   })
   .catch((error) => {
     console.error("Não foi possível inicializar o PostgreSQL:", error);

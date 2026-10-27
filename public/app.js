@@ -1,4 +1,4 @@
-const state = { products: [], cart: new Map(), csrfToken: null, user: null };
+const state = { products: [], paymentCards: [], cart: new Map(), csrfToken: null, user: null };
 const money = (cents) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 const $ = (selector) => document.querySelector(selector);
 const toast = $("#toast");
@@ -82,6 +82,47 @@ function renderCart() {
     <button id="continue-checkout" class="primary-button wide-button" type="button">Continuar para pagamento →</button>`;
 }
 
+function renderPaymentCards() {
+  $("#payment-card-list").innerHTML = state.paymentCards.length ? state.paymentCards.map((card) => `
+    <article class="payment-card-item">
+      <span class="payment-card-mark" aria-hidden="true">▣</span>
+      <div class="payment-card-details">
+        <b>${escapeHtml(card.brand)} ···· ${escapeHtml(card.last4)}</b>
+        <small>${escapeHtml(card.cardholder)}<br>Validade ${String(card.expiry_month).padStart(2, "0")}/${escapeHtml(card.expiry_year)}</small>
+      </div>
+      <button class="card-remove" type="button" data-remove-card="${escapeHtml(card.id)}" aria-label="Remover cartão ${escapeHtml(card.brand)} final ${escapeHtml(card.last4)}">×</button>
+    </article>`).join("") : '<p class="empty-cards">Nenhum cartão cadastrado. Adicione um cartão fictício abaixo para fazer uma compra simulada.</p>';
+
+  const cardSelect = $("#checkout-card");
+  cardSelect.innerHTML = '<option value="">Selecione um cartão cadastrado</option>' + state.paymentCards.map((card) =>
+    `<option value="${escapeHtml(card.id)}">${escapeHtml(card.brand)} ···· ${escapeHtml(card.last4)} · ${String(card.expiry_month).padStart(2, "0")}/${escapeHtml(card.expiry_year)}</option>`,
+  ).join("");
+  cardSelect.value = state.paymentCards[0]?.id || "";
+  $("#checkout-card-hint").textContent = state.paymentCards.length
+    ? "Pagamento acadêmico simulado. Nenhuma transação real será realizada."
+    : "Cadastre um cartão fictício para habilitar a compra.";
+  $("#checkout-form [type=submit]").disabled = !state.paymentCards.length;
+}
+
+async function loadPaymentCards() {
+  state.paymentCards = await request("/api/payment-cards");
+  renderPaymentCards();
+}
+
+async function openPaymentCards() {
+  if (!state.user) {
+    showAuth();
+    notify("Entre ou crie sua conta para cadastrar cartões.");
+    return;
+  }
+  try {
+    await loadPaymentCards();
+    openDialog("cards-dialog");
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
 function openDialog(id) {
   const dialog = document.getElementById(id);
   if (!dialog.open) dialog.showModal();
@@ -144,9 +185,26 @@ document.addEventListener("click", async (event) => {
     const items = [...state.cart.values()];
     const total = items.reduce((sum, item) => sum + item.product.price_cents * item.quantity, 0);
     $("#checkout-summary").innerHTML = `<div class="cart-total"><span>${items.length} ${items.length === 1 ? "produto" : "produtos"} · entrega simulada</span><span>${money(total)}</span></div>`;
+    try {
+      await loadPaymentCards();
+    } catch (error) {
+      return notify(error.message);
+    }
     $("#cart-dialog").close();
     $("#checkout-form").reset();
+    renderPaymentCards();
     openDialog("checkout-dialog");
+  }
+
+  const removeCard = event.target.closest("[data-remove-card]");
+  if (removeCard) {
+    try {
+      await request(`/api/payment-cards/${encodeURIComponent(removeCard.dataset.removeCard)}`, { method: "DELETE" });
+      await loadPaymentCards();
+      notify("Cartão removido da sua conta.");
+    } catch (error) {
+      notify(error.message);
+    }
   }
 });
 
@@ -154,11 +212,17 @@ $("#cart-button").addEventListener("click", () => {
   renderCart();
   openDialog("cart-dialog");
 });
+$("#cards-button").addEventListener("click", openPaymentCards);
+$("#manage-cards-from-checkout").addEventListener("click", async () => {
+  $("#checkout-dialog").close();
+  await openPaymentCards();
+});
 $("#login-button").addEventListener("click", async () => {
   if (!state.user) return showAuth();
   try {
     await request("/api/logout", { method: "POST" });
     state.user = null;
+    state.paymentCards = [];
     state.csrfToken = (await request("/api/csrf")).csrfToken;
     updateAuthButton();
     notify("Você saiu da sua conta com segurança.");
@@ -187,7 +251,8 @@ $("#category-filter").addEventListener("change", renderProducts);
 
 $("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const loginForm = event.currentTarget;
+  const form = new FormData(loginForm);
   try {
     const result = await request("/api/login", {
       method: "POST",
@@ -196,7 +261,7 @@ $("#login-form").addEventListener("submit", async (event) => {
     state.user = result.user;
     state.csrfToken = result.csrfToken;
     updateAuthButton();
-    event.currentTarget.reset();
+    loginForm.reset();
     $("#auth-dialog").close();
     notify(`Boas-vindas, ${state.user.name.split(" ")[0]}! ✧`);
   } catch (error) {
@@ -206,7 +271,11 @@ $("#login-form").addEventListener("submit", async (event) => {
 
 $("#register-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const registerForm = event.currentTarget;
+  const feedback = $("#register-feedback");
+  feedback.textContent = "";
+  feedback.classList.add("hidden");
+  const form = new FormData(registerForm);
   try {
     const result = await request("/api/register", {
       method: "POST",
@@ -215,11 +284,50 @@ $("#register-form").addEventListener("submit", async (event) => {
     state.user = result.user;
     state.csrfToken = result.csrfToken;
     updateAuthButton();
-    event.currentTarget.reset();
+    registerForm.reset();
     $("#auth-dialog").close();
     notify(`Conta criada. Boas-vindas, ${state.user.name.split(" ")[0]}! ✧`);
   } catch (error) {
-    notify(error.message);
+    feedback.textContent = error.message;
+    feedback.classList.remove("hidden");
+  }
+});
+
+function hasValidDemoCardLength(digits) {
+  return /^\d{13,19}$/.test(digits);
+}
+
+$("#payment-card-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const cardForm = event.currentTarget;
+  const feedback = $("#payment-card-feedback");
+  feedback.textContent = "";
+  feedback.classList.add("hidden");
+  const form = new FormData(cardForm);
+  const digits = String(form.get("number")).replace(/\D/g, "");
+  const [yearText, monthText] = String(form.get("expiry")).split("-");
+  if (!hasValidDemoCardLength(digits)) {
+    feedback.textContent = "O número fictício deve conter de 13 a 19 dígitos.";
+    feedback.classList.remove("hidden");
+    return;
+  }
+  try {
+    await request("/api/payment-cards", {
+      method: "POST",
+      body: JSON.stringify({
+        cardholder: form.get("cardholder"),
+        brand: form.get("brand"),
+        last4: digits.slice(-4),
+        expiryMonth: Number(monthText),
+        expiryYear: Number(yearText),
+      }),
+    });
+    cardForm.reset();
+    await loadPaymentCards();
+    notify("Cartão demonstrativo cadastrado.");
+  } catch (error) {
+    feedback.textContent = error.message;
+    feedback.classList.remove("hidden");
   }
 });
 
@@ -227,19 +335,13 @@ $("#checkout-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!state.cart.size) return notify("Seu carrinho está vazio.");
   const form = new FormData(event.currentTarget);
-  const card = String(form.get("card")).replace(/\D/g, "");
-  const expiry = String(form.get("expiry"));
-  const cvv = String(form.get("cvv"));
-  if (card.length < 13 || card.length > 19 || !/^\d{2}\/\d{2}$/.test(expiry) || !/^\d{3,4}$/.test(cvv)) {
-    return notify("Confira o número, a validade e o CVV do cartão demonstrativo.");
-  }
-  const last4 = card.slice(-4);
+  const cardId = String(form.get("cardId"));
   try {
     const result = await request("/api/orders", {
       method: "POST",
       body: JSON.stringify({
-        items: [...state.cart.values()].map(({ product, quantity }) => ({ productId: product.id, quantity })),
-        payment: { brand: form.get("brand"), last4 },
+        items: [...state.cart.values()].map(({ product, quantity }) => ({ productId: Number(product.id), quantity })),
+        payment: { cardId },
       }),
     });
     state.cart.clear();
@@ -254,7 +356,10 @@ $("#checkout-form").addEventListener("submit", async (event) => {
 });
 
 async function loadProducts() {
-  state.products = await request("/api/products");
+  state.products = (await request("/api/products")).map((product) => ({
+    ...product,
+    id: Number(product.id),
+  }));
   const categories = [...new Set(state.products.map((product) => product.category))];
   $("#category-filter").innerHTML = '<option value="">Todas</option>' + categories.map(
     (category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`,

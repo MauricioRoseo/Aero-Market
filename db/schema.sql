@@ -21,9 +21,21 @@ CREATE TABLE IF NOT EXISTS products (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS payment_cards (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  cardholder_encrypted TEXT NOT NULL,
+  brand TEXT NOT NULL CHECK (brand IN ('Visa', 'Mastercard', 'Amex', 'Elo', 'Hipercard')),
+  last4 CHAR(4) NOT NULL CHECK (last4 ~ '^[0-9]{4}$'),
+  expiry_month SMALLINT NOT NULL CHECK (expiry_month BETWEEN 1 AND 12),
+  expiry_year SMALLINT NOT NULL CHECK (expiry_year BETWEEN 2020 AND 2100),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS orders (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id),
+  payment_card_id BIGINT REFERENCES payment_cards(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'processing'
     CHECK (status IN ('processing', 'shipped', 'delivered')),
   total_cents INTEGER NOT NULL CHECK (total_cents > 0),
@@ -32,6 +44,9 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_last4 CHAR(4) NOT NULL CHECK (payment_last4 ~ '^[0-9]{4}$'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS payment_card_id BIGINT REFERENCES payment_cards(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS order_items (
   id BIGSERIAL PRIMARY KEY,
@@ -43,4 +58,5 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 
 CREATE INDEX IF NOT EXISTS orders_user_created_idx ON orders(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS payment_cards_user_created_idx ON payment_cards(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS order_items_order_idx ON order_items(order_id);
